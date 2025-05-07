@@ -279,16 +279,17 @@ class Dataset: #modified class : skip expertise
             self.courses_index.update({v: k for k, v in self.courses_index.items()})
 
     def make_course_consistent(self):
-        """Make the courses consistent by removing the skills that are provided and required at the same time"""
+        """Make the courses consistent by removing the skills that are provided and required at the same time.
+        In binary case (only care about having/not having skills), if a course both requires and provides a skill,
+        we remove the requirement since the learner can learn that skill from the course."""
         for course in self.courses:
             for skill_id in range(len(self.skills)):
                 required_level = course[0][skill_id]
                 provided_level = course[1][skill_id]
-                if provided_level != 0 and provided_level <= required_level:
-                    if provided_level == 1:
-                        course[0][skill_id] = 0
-                    else:
-                        course[0][skill_id] = provided_level - 1
+                # If the course both requires and provides the skill (both levels > 0)
+                if provided_level > 0 and required_level > 0:
+                    # Remove the requirement since the skill can be learned from the course
+                    course[0][skill_id] = 0
 
     def get_jobs_inverted_index(self):
         """Get the inverted index for the jobs. The inverted index is a dictionary that maps the skill to the jobs that require it"""
