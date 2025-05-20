@@ -14,12 +14,12 @@ class Dataset: #modified class
     
     This class handles data loading, processing, and analysis for the recommendation system.
     It manages three main types of data:
-    - Learner profiles and their skills
-    - Job requirements and their required skills
-    - Course information including required and provided skills
+    - Learner profiles and their skills with mastery levels
+    - Job requirements and their required skills with mastery levels
+    - Course information including required and provided skills with mastery levels
     
-    The class implements the No-Mastery-Levels approach, where skills are represented
-    in a binary format (0/1) instead of using mastery levels.
+    The class implements the Mastery-Levels approach, where skills are represented
+    with mastery levels (1-3) instead of binary values.
     """
     # The Dataset class is used to load and store the data of the recommendation problem
     def __init__(self, config):
@@ -37,35 +37,38 @@ class Dataset: #modified class
         )
 
     def load_data(self):
-        """Load the data from the files specified in the config and store it in the class attributes"""
+        """Load the data from the files specified in the config and store it in the class attributes.
+        
+        This method initializes the dataset by:
+        1. Loading skills and their taxonomy
+        2. Loading mastery level mappings
+        3. Loading learner profiles with their skill mastery levels
+        4. Loading job requirements with required skill mastery levels
+        5. Loading courses with their required and provided skill mastery levels
+        6. Creating subsamples if specified in config
+        7. Making courses consistent by handling skill requirements
+        """
         self.rng = random.Random(self.config["seed"])
         self.load_skills() 
         self.load_mastery_levels()
-        self.load_learners() #modify
-        self.load_jobs() #modify
-        self.load_courses() #modify
+        self.load_learners() 
+        self.load_jobs() 
+        self.load_courses() 
         self.get_subsample()
         self.make_course_consistent()
         
 
 
     def load_skills(self):
-        """
-        Loads skills from a taxonomy file into the instance, processes them based on configuration,
-        and creates a mapping of skills to integer indices.
-
-        The method reads a CSV file specified in the configuration and processes the skills
-        either by extracting unique values from the 'Type Level 3' column (if level_3 is True)
-        or using the 'unique_id' column (if level_3 is False). It populates `self.skills` with
-        a set of skills and `self.skills2int` with a dictionary mapping skills to integer indices.
-
+        """Loads skills from a taxonomy file and creates mappings between skill IDs and indices.
+        
+        The method processes skills based on configuration:
+        - If level_3 is True: Uses Type Level 3 taxonomy for broader skill categories
+        - If level_3 is False: Uses unique_id for individual skills
+        
         Attributes Modified:
-            self.skills (set): A set of unique skill identifiers or level 3 types.
-            self.skills2int (dict): A dictionary mapping skill identifiers to integer indices.
-
-        Raises:
-            FileNotFoundError: If the taxonomy file path in `self.config["taxonomy_path"]` is invalid.
-            KeyError: If required columns ('unique_id' or 'Type Level 3') are missing in the CSV file.
+            self.skills (set): Set of unique skill identifiers or level 3 types
+            self.skills2int (dict): Dictionary mapping skill identifiers to integer indices
         """
         # load the skills from the taxonomy file
         self.skills = pd.read_csv(self.config["taxonomy_path"])
@@ -98,10 +101,28 @@ class Dataset: #modified class
             self.skills2int = {skill: i for i, skill in enumerate(self.skills)}
 
     def load_mastery_levels(self):
-        """Load the mastery levels from the file specified in the config and store it in the class attribute"""
+        """Load the mastery level mappings from the configuration file.
+        
+        The mastery levels define how string-based skill levels (e.g., 'beginner', 'intermediate')
+        are mapped to numerical values (1-3).
+        
+        Attributes Modified:
+            self.mastery_levels (dict): Dictionary mapping string mastery levels to numerical values
+        """
         self.mastery_levels = json.load(open(self.config["mastery_levels_path"]))
 
     def get_avg_skills(self, skill_list, replace_unk):
+        """Calculate average mastery levels for a list of skills.
+        
+        Args:
+            skill_list (list): List of (skill_id, mastery_level) tuples
+            replace_unk (int): Value to replace unknown mastery levels (-1)
+            
+        Returns:
+            dict: Dictionary mapping skill indices to their average mastery levels
+                 Only includes skills with valid mastery levels
+                 Mastery levels are rounded to nearest integer
+        """
         avg_skills = defaultdict(list)
         for skill, mastery_level in skill_list:
             # if the mastery level is a string and is in the mastery levels, we replace it with the corresponding value, otherwise we do nothing and continue to the next skill
@@ -150,10 +171,17 @@ class Dataset: #modified class
     
 
     def load_learners(self,replace_unk=1): #### Function modified
-        """Load the learners from the file specified in the config and store it in the class attribute
-
+        """Load learner profiles and their skill mastery levels.
+        
         Args:
-            replace_unk (int, optional): The value to replace the unknown mastery levels. Defaults to 1.
+            replace_unk (int, optional): Value to replace unknown mastery levels. Defaults to 1.
+            
+        The method:
+        1. Loads learner profiles from JSON
+        2. Calculates average mastery levels for each skill
+        3. Filters out learners with too many skills
+        4. Creates a numpy array of learner skill mastery levels
+        5. Maintains mappings between learner IDs and array indices
         """
         learners = json.load(open(self.config["cv_path"]))
         self.max_learner_skills = self.config["max_cv_skills"]
@@ -186,11 +214,16 @@ class Dataset: #modified class
 
 
     def load_jobs(self,replace_unk=3):
-        """Load the jobs from the file specified in the config and store it in the class attribute.
-        Only jobs with at least one required skill are kept.
-
+        """Load job requirements and their required skill mastery levels.
+        
         Args:
-            replace_unk (int, optional): The value to replace the unknown mastery levels. Defaults to 3.
+            replace_unk (int, optional): Value to replace unknown mastery levels. Defaults to 3.
+            
+        The method:
+        1. Loads job requirements from JSON
+        2. Calculates average mastery levels for required skills
+        3. Creates a numpy array of job skill requirements
+        4. Maintains mappings between job IDs and array indices
         """
         jobs = json.load(open(self.config["job_path"]))
         self.jobs = np.zeros((len(jobs), len(self.skills)), dtype=int)
@@ -210,11 +243,19 @@ class Dataset: #modified class
        
 
     def load_courses(self,replace_unk=2):
-        """Load the courses from the file specified in the config and store it in the class attribute.
-        Only courses with at least one provided skill are kept.
-
+        """Load course information including required and provided skill mastery levels.
+        
         Args:
-            replace_unk (int, optional): The value to replace the unknown mastery levels. Defaults to 2.
+            replace_unk (int, optional): Value to replace unknown mastery levels. Defaults to 2.
+            
+        The method:
+        1. Loads course information from JSON
+        2. Skips courses with no provided skills
+        3. Calculates average mastery levels for:
+           - Required skills (if any)
+           - Provided skills
+        4. Creates a numpy array of course skill requirements and provisions
+        5. Maintains mappings between course IDs and array indices
         """
         courses = json.load(open(self.config["course_path"]))
         self.courses = np.zeros((len(courses), 2, len(self.skills)), dtype=int)
@@ -247,7 +288,15 @@ class Dataset: #modified class
 
 
     def get_subsample(self):
-        """Get a subsample of the dataset based on the config parameters"""
+        """Create subsamples of the dataset based on configuration parameters.
+        
+        If specified in config, creates random subsamples of:
+        - Learners (nb_cvs)
+        - Jobs (nb_jobs)
+        - Courses (nb_courses)
+        
+        Updates the corresponding numpy arrays and index mappings.
+        """
         random.seed(self.config["seed"])
         if self.config["nb_cvs"] != -1:
             # get a random sample of self.config["nb_cvs"] of ids from 0 to len(self.learners)
@@ -278,10 +327,16 @@ class Dataset: #modified class
             self.courses_index.update({v: k for k, v in self.courses_index.items()})
 
     def make_course_consistent(self):
-        """Make the courses consistent by removing the skills that are provided and required at the same time.
-        In binary case (only care about having/not having skills), if a course both requires and provides a skill,
-        we remove the requirement since the learner can learn that skill from the course.
-        Also remove requirements for skills that are not provided by the course (inconsistent case)."""
+        """Make courses consistent by handling skill requirements and provisions.
+        
+        For each course:
+        1. If a skill is both required and provided:
+           - If provided level is 1, remove requirement
+           - Otherwise, set requirement to (provided level - 1)
+        2. Remove requirements for skills not provided by the course
+        
+        This ensures courses are logically consistent in their skill requirements.
+        """
         for course in self.courses:
             for skill_id in range(len(self.skills)):
                 required_level = course[0][skill_id]
@@ -296,7 +351,14 @@ class Dataset: #modified class
                 
 
     def get_jobs_inverted_index(self):
-        """Get the inverted index for the jobs. The inverted index is a dictionary that maps the skill to the jobs that require it"""
+        """Create an inverted index mapping skills to jobs that require them.
+        
+        Creates a dictionary where:
+        - Keys are skill indices
+        - Values are sets of job indices that require that skill
+        
+        This index is used to efficiently find jobs requiring specific skills.
+        """
         self.jobs_inverted_index = defaultdict(set)
         for i, job in enumerate(self.jobs):
             for skill, level in enumerate(job):
@@ -304,14 +366,15 @@ class Dataset: #modified class
                     self.jobs_inverted_index[skill].add(i)
 
     def get_nb_applicable_jobs(self, learner, threshold):
-        """Get the number of applicable jobs for a learner
-
+        """Calculate number of jobs a learner is eligible for based on skill mastery levels.
+        
         Args:
-            learner (list): list of skills and mastery level of the learner
-            threshold (float): the threshold for the matching
-
+            learner (np.ndarray): Learner's skill vector with mastery levels
+            threshold (float): Minimum matching score required for job eligibility
+            
         Returns:
-            int: the number of applicable jobs
+            int: Number of jobs where the learner's skills meet or exceed requirements
+                 at the specified threshold
         """
         nb_applicable_jobs = 0
         jobs_subset = set()
@@ -329,13 +392,14 @@ class Dataset: #modified class
         return nb_applicable_jobs
 
     def get_avg_applicable_jobs(self, threshold):
-        """Get the average number of applicable jobs for all the learners
-
+        """Calculate average number of applicable jobs across all learners.
+        
         Args:
-            threshold (float): the threshold for the matching
-
+            threshold (float): Minimum matching score required for job eligibility
+            
         Returns:
-            float: the average number of applicable jobs
+            float: Average number of jobs that learners are eligible for
+                 based on their skill mastery levels
         """
         avg_applicable_jobs = 0
         for learner in self.learners:
@@ -343,16 +407,18 @@ class Dataset: #modified class
         avg_applicable_jobs /= len(self.learners)
         return avg_applicable_jobs
 
-    def get_all_enrollable_courses(self, learner, threshold): #not used for REINFORCE
-        """Get all the enrollable courses for a learner in binary case.
-        Since required skills are handled in make_course_consistent(), we only need to check
-        if the course provides any new skills that the learner doesn't have.
-
+    def get_all_enrollable_courses(self, learner, threshold):
+        """Find all courses a learner can enroll in based on their skill mastery levels.
+        
         Args:
-            learner (list): list of skills and mastery level of the learner
-
+            learner (np.ndarray): Learner's skill vector with mastery levels
+            threshold (float): Minimum matching score required for course enrollment
+            
         Returns:
-            dict: dictionary of enrollable courses
+            dict: Dictionary mapping course indices to their skill requirements and provisions
+                 Only includes courses where:
+                 - Learner meets required skill mastery levels
+                 - Course provides at least one new skill
         """
         enrollable_courses = {}
         for i, course in enumerate(self.courses):
@@ -374,7 +440,8 @@ class Dataset: #modified class
                                 the mastery level of that skill (0 means no skill).
             
         Returns:
-            dict: Dictionary mapping skill indices to their mastery levels
+            dict: Dictionary mapping skill indices to their mastery levels.
+                 Only includes skills with mastery level > 0.
         """
         # Get all non-zero skills and their mastery levels
         skills = np.nonzero(learner)[0]
@@ -400,8 +467,8 @@ class Dataset: #modified class
         Returns:
             dict: Dictionary mapping skill indices to their required mastery levels.
                  For completely missing skills, the value is the required mastery level.
-                 For partially missing skills, the value is the gap between required
-                 and current mastery level.
+                 For partially missing skills, the value is the required mastery level
+                 (which is higher than the current level).
                  
         Example:
             If learner has skill 1 with level 1 and skill 3 with level 1:
@@ -418,7 +485,6 @@ class Dataset: #modified class
             }
         """
         # Get learner's current skills and their mastery levels
-        # Returns a dict mapping skill indices to their current mastery levels
         learner_skills = self.get_learner_acquired_skills(learner)
         
         # Dictionary to store missing skills and their required mastery levels
@@ -426,7 +492,7 @@ class Dataset: #modified class
         # Value: highest required mastery level from all jobs
         missing_skills = {}
         
-        # Iterate through ALL jobs in the dataset
+        # Check each job's requirements
         for job in self.jobs:
             # Get skills required by this job and their mastery levels
             # Only include skills with mastery level > 0

@@ -154,8 +154,11 @@ class CourseRecEnv(gym.Env):
         """Calculate N1, N2, N3 metrics for a course recommendation.
         
         These metrics evaluate the effectiveness of a course recommendation:
-        - N1: Number of missing skills resolved by the course
+        - N1: Number of missing skills that are satisfied after taking the course
+           (A skill is considered satisfied if its mastery level after learning
+            meets or exceeds the required level)
         - N2: Number of remaining missing skills after taking the course
+           (Skills that still don't meet their required mastery levels)
         - N3: Number of skills provided by the course that are not in missing skills
         
         Args:
@@ -165,26 +168,36 @@ class CourseRecEnv(gym.Env):
         Returns:
             tuple: (N1, N2, N3) metrics
         """
-        # Get missing skills before updating
+        # Get missing skills and their required levels before updating
         missing_skills_before = self.dataset.get_learner_missing_skills(learner)
         
-        # Get skills provided by the course
-        course_provided_skills = set(np.nonzero(course[1])[0])
+        # Get skills provided by the course with their mastery levels
+        course_provided_skills = {skill: level for skill, level in enumerate(course[1]) if level > 0}
         
         # Calculate skills after learning the course, update state
         updated_skills = np.maximum(learner, course[1])
         
-        # Get missing skills after updating
+        # Get missing skills and their required levels after updating
         missing_skills_after = self.dataset.get_learner_missing_skills(updated_skills)
         
-        # Calculate N1: number of missing skills resolved by this course
-        N1 = len(missing_skills_before - missing_skills_after)
+        # Calculate N1: number of missing skills that are satisfied
+        N1 = 0
+        for skill, required_level in missing_skills_before.items():
+            if skill not in missing_skills_after:
+                # Skill is completely satisfied (no longer in missing_skills_after)
+                N1 += 1
+            elif updated_skills[skill] >= required_level:
+                # Skill is satisfied (current level meets or exceeds required)
+                N1 += 1
         
-        # Calculate N2: remaining missing skills after learning this course
+        # Calculate N2: number of remaining missing skills
         N2 = len(missing_skills_after)
         
-        # Calculate N3: number of skills provided by the course that are not in missing skills
-        N3 = len(course_provided_skills - missing_skills_before)
+        # Calculate N3: number of additional skills provided that is not useful
+        N3 = 0
+        for skill in course_provided_skills:
+            if skill not in missing_skills_before:
+                N3 += 1
         
         return N1, N2, N3
 
@@ -222,7 +235,7 @@ class CourseRecEnv(gym.Env):
         - |E(φ)|: Number of new jobs that become applicable
         - N1: Number of missing skills resolved
         - N2: Number of remaining missing skills
-        - N3: Number of additional skills provided
+        - N3: Number of additional skills provided that is not useful
         
         Args:
             learner (np.ndarray): Current learner's skill vector
@@ -298,7 +311,7 @@ class CourseRecEnv(gym.Env):
             observation = self._get_obs()
             info = self._get_info()
             reward = info["nb_applicable_jobs"]
-        else: # No-Mastery-Levels Models
+        else: # Enhanced Models
             # Calculate Usefulness-of-info-as-Rwd
             utility = self.calculate_utility(learner, course)
             

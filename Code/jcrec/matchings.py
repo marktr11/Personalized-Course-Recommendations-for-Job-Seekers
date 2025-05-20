@@ -40,18 +40,20 @@ def matching_binary(level1: np.ndarray, level2: np.ndarray) -> float:
 
 def matching(level1, level2):
     """
-    Compute the matching score between two skill vectors in original case.
-    Takes into account the mastery levels of skills.
+    Compute the matching score between two skill vectors considering mastery levels.
+    Calculates how well the mastery levels in level1 match the required levels in level2.
 
     Args:
-        level1 (np.ndarray): An array of skills for the first entity (e.g., learner).
-        level2 (np.ndarray): An array of skills for the second entity (e.g., job or course).
+        level1 (np.ndarray): An array of skills with mastery levels for the first entity (e.g., learner).
+        level2 (np.ndarray): An array of required skills with mastery levels for the second entity (e.g., job or course).
 
     Returns:
         float: A matching score between 0 and 1, where:
-            - 1.0 means perfect match (all required skills at required levels)
+            - 1.0 means perfect match (all required skills at or above required levels)
             - 0.0 means no match
             - Values in between represent partial matches based on skill levels
+            - For each skill, the score is min(level1, level2) / level2
+            - Final score is average of all skill scores
     """
     # get the minimum of the two arrays
     minimum_skill = np.minimum(level1, level2)
@@ -69,19 +71,21 @@ def matching(level1, level2):
 
 def learner_job_matching(learner: np.ndarray, job: np.ndarray) -> float:
     """
-    Compute the matching score between a learner and a job.
+    Compute the matching score between a learner and a job based on mastery levels.
 
     Args:
-        learner (np.ndarray): Learner's skill vector where 1 indicates
-                            possession of a skill and 0 indicates absence.
-        job (np.ndarray): Job's required skills vector where 1 indicates
-                         required skill and 0 indicates not required.
+        learner (np.ndarray): Learner's skill vector where each value indicates
+                            the mastery level of that skill (0 means no skill).
+        job (np.ndarray): Job's required skills vector where each value indicates
+                         the required mastery level (0 means not required).
 
     Returns:
         float: Matching score between 0 and 1, where:
-            - 1.0 means the learner has all required skills for the job
-            - 0.0 means the learner has none of the required skills
-            - Values in between represent partial matches
+            - 1.0 means the learner has all required skills at or above required levels
+            - 0.0 means either:
+              * The learner has none of the required skills, or
+              * Either the learner or job has no skills
+            - Values in between represent partial matches based on mastery levels
     """
     # Check if one of the arrays is empty
     if not (np.any(job) and np.any(learner)):
@@ -92,14 +96,21 @@ def learner_job_matching(learner: np.ndarray, job: np.ndarray) -> float:
 def learner_course_required_matching(learner, course):
     """
     Compute the matching score between a learner and a course's required skills.
-    Always uses original matching as required skills have mastery levels.
+    Always uses mastery level matching as required skills have mastery levels.
 
     Args:
-        learner (np.ndarray): Learner's skill vector
-        course (np.ndarray): Course's skills array [required, provided]
+        learner (np.ndarray): Learner's skill vector where each value indicates
+                            the mastery level of that skill (0 means no skill).
+        course (np.ndarray): Course's skills array [required, provided] where
+                            required skills are in the first dimension with mastery levels.
 
     Returns:
-        float: Matching score between 0 and 1
+        float: Matching score between 0 and 1, where:
+            - 1.0 means either:
+              * The course has no required skills, or
+              * The learner meets all required skill mastery levels
+            - 0.0 means the learner meets none of the required skill levels
+            - Values in between represent partial matches based on mastery levels
     """
     required_course = course[0] #required skills
 
@@ -112,19 +123,20 @@ def learner_course_required_matching(learner, course):
 def learner_course_provided_matching(learner: np.ndarray, course: np.ndarray) -> float:
     """
     Compute the matching score between a learner and a course's provided skills.
-    This measures how many of the course's provided skills the learner already has.
+    This measures how many of the course's provided skills the learner already has
+    at the same or higher mastery level.
 
     Args:
-        learner (np.ndarray): Learner's skill vector where 1 indicates
-                            possession of a skill and 0 indicates absence.
+        learner (np.ndarray): Learner's skill vector where each value indicates
+                            the mastery level of that skill (0 means no skill).
         course (np.ndarray): Course's skills array [required, provided] where
-                            provided skills are in the second dimension.
+                            provided skills are in the second dimension with mastery levels.
 
     Returns:
         float: Matching score between 0 and 1, where:
-            - 1.0 means the learner already has all skills the course provides
-            - 0.0 means the learner has none of the skills the course provides
-            - Values in between represent partial matches
+            - 1.0 means the learner already has all provided skills at or above the course's levels
+            - 0.0 means the learner has none of the provided skills at required levels
+            - Values in between represent partial matches based on mastery levels
     """
     provided_course = course[1]  # provided skills
     return matching(learner, provided_course)
@@ -142,15 +154,18 @@ def learner_course_matching(learner: np.ndarray, course: np.ndarray) -> float:
     - Courses that the learner is qualified for (high required_matching) are preferred
 
     Args:
-        learner (np.ndarray): Learner's skill vector where 1 indicates
-                            possession of a skill and 0 indicates absence.
-        course (np.ndarray): Course's skills array [required, provided] where
-                            required skills are in the first dimension and
-                            provided skills are in the second dimension.
+        learner (np.ndarray): Learner's skill vector where each value indicates
+                            the mastery level of that skill (0 means no skill).
+        course (np.ndarray): Course's skills array [required, provided] where:
+                            - First dimension contains required skills with mastery levels
+                            - Second dimension contains provided skills with mastery levels
 
     Returns:
-        float: Overall matching score between 0 and 1, where higher values
-               indicate better course recommendations for the learner.
+        float: Overall matching score between 0 and 1, where:
+            - Higher values indicate better course recommendations
+            - Score is higher when:
+              * Learner meets required skill levels (high required_matching)
+              * Course provides new skills (low provided_matching)
     """
     # Get the required and provided matchings
     required_matching = learner_course_required_matching(learner, course)

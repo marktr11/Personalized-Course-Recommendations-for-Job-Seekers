@@ -72,7 +72,7 @@ def main():
     # --- MLflow: experiment and run ---
     mlflow.set_tracking_uri("http://127.0.0.1:8080")
 
-    mlflow.set_experiment("SKIP-EXPERTISE-EXP1")
+    mlflow.set_experiment("MASTERY-LEVELS-EXP1")
 
 
     for run in range(config["nb_runs"]):
