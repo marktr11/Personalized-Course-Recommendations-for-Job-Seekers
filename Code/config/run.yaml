@@ -23,7 +23,7 @@ nb_jobs: 100                                          # Number of jobs to includ
 
 # Model Parameters
 threshold: 0.8                                         # Minimum matching threshold for job eligibility
-k: 3                                                  # Number of course recommendations to generate
+k: 1                                                  # Number of course recommendations to generate
 model: dqn                                            # Reinforcement learning algorithm (PPO)
 total_steps: 500000                                   # Total training steps
 eval_freq: 1000                                       # Evaluation frequency during training
@@ -34,7 +34,7 @@ seed: 42                                              # Random seed for reproduc
 baseline: false                                        # Model type:
                                                        # true: original model (baseline)
                                                        # false: W-UIR-Mastery-Levels model
-feature: "Weighted-Usefulness-as-Rwd"                         # Feature type for non-baseline model 
+feature: "Usefulness-as-Rwd"                         # Feature type for non-baseline model 
 #options: "Usefulness-as-Rwd" or "Weighted-Usefulness-as-Rwd"
 
 # Purpose

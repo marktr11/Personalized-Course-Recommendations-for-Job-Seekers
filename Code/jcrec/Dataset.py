@@ -139,35 +139,35 @@ class Dataset: #modified class
 
         return avg_skills
 
-    def get_base_skills(self,skill_list): #new feature
-        """
-        Convert a learner's list of type-4 skills to a unique set of type-3 base skills.
+    # def get_base_skills(self,skill_list): #new feature
+    #     """
+    #     Convert a learner's list of type-4 skills to a unique set of type-3 base skills.
 
-        Args:
-            skill_list (list of tuples): Each tuple contains (skill_id, mastery_level),
-                                        e.g., (1024, 'beginner').
+    #     Args:
+    #         skill_list (list of tuples): Each tuple contains (skill_id, mastery_level),
+    #                                     e.g., (1024, 'beginner').
 
-        Returns:
-            set: A set of base skill IDs (type-3) derived from the input skill list.
-                The number of base skills may be less than or equal to the original list,
-                due to mapping multiple type-4 skills to the same base skill.
-        """
-        base_skills = set()
-        for skill, mastery_level in skill_list:
-            # if the mastery level is a string and is in the mastery levels, we replace it with the corresponding value, otherwise we do nothing and continue to the next skill
-            # we keep it to maintain consistency with the original version, which uses this condition.
-            if isinstance(mastery_level, str) and mastery_level in self.mastery_levels:
-                #eg. skill = 1024 , mastery_level = 'beginner'
-                # mapping to an integer which is the id of taxonomy level
-                # Mapping skills type 4 of learners to type 3, 
-                # so the number of skills may be less than or equal to the original number of skills
-                try:
-                    base_skills.add(self.skills2int[skill])
-                except KeyError:
-                    continue
+    #     Returns:
+    #         set: A set of base skill IDs (type-3) derived from the input skill list.
+    #             The number of base skills may be less than or equal to the original list,
+    #             due to mapping multiple type-4 skills to the same base skill.
+    #     """
+    #     base_skills = set()
+    #     for skill, mastery_level in skill_list:
+    #         # if the mastery level is a string and is in the mastery levels, we replace it with the corresponding value, otherwise we do nothing and continue to the next skill
+    #         # we keep it to maintain consistency with the original version, which uses this condition.
+    #         if isinstance(mastery_level, str) and mastery_level in self.mastery_levels:
+    #             #eg. skill = 1024 , mastery_level = 'beginner'
+    #             # mapping to an integer which is the id of taxonomy level
+    #             # Mapping skills type 4 of learners to type 3, 
+    #             # so the number of skills may be less than or equal to the original number of skills
+    #             try:
+    #                 base_skills.add(self.skills2int[skill])
+    #             except KeyError:
+    #                 continue
     
 
-        return base_skills
+    #     return base_skills
     
 
     def load_learners(self,replace_unk=1): #### Function modified
