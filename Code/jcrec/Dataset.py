@@ -165,11 +165,8 @@ class Dataset: #modified class
 
         # fill the numpy array with the learners skill proficiency levels from the json file
         for learner_id, learner in learners.items():
-
-
-            learner_base_skills = self.get_base_skills(learner) #remove expertise
-            learner_skills = {skill: 1 for skill in learner_base_skills}
-            
+            # Get average mastery levels for each skill
+            learner_skills = self.get_avg_skills(learner, replace_unk)
 
             # if the number of skills is greater than the max_learner_skills, we skip the learner
             if len(learner_skills) > self.max_learner_skills:
@@ -180,7 +177,7 @@ class Dataset: #modified class
                 self.learners[index][skill] = level
 
             self.learners_index[index] = learner_id
-            self.learners_index[learner_id] = index #????? why 
+            self.learners_index[learner_id] = index
 
             index += 1
 
@@ -203,8 +200,8 @@ class Dataset: #modified class
             self.jobs_index[index] = job_id
             self.jobs_index[job_id] = index
 
-            job_base_skills = self.get_base_skills(job)
-            job_skills = {skill: 1 for skill in job_base_skills}
+            # Get average mastery levels for each skill
+            job_skills = self.get_avg_skills(job, replace_unk)
 
             for skill, level in job_skills.items():
                 self.jobs[index][skill] = level
@@ -231,19 +228,15 @@ class Dataset: #modified class
             self.courses_index[course_id] = index
             self.courses_index[index] = course_id
 
-
-
-            provided_base_skills = self.get_base_skills(course["to_acquire"]) #remove expertise
-            provided_skills = {skill: 1 for skill in provided_base_skills}
+            # Get average mastery levels for provided skills
+            provided_skills = self.get_avg_skills(course["to_acquire"], replace_unk)
 
             for skill, level in provided_skills.items():
                 self.courses[index][1][skill] = level
 
             # Process required skills if they exist
             if "required" in course:
-
-                required_base_skills = self.get_base_skills(course["required"])
-                required_skills = {skill: 1 for skill in required_base_skills}
+                required_skills = self.get_avg_skills(course["required"], replace_unk)
 
                 for skill, level in required_skills.items():
                     self.courses[index][0][skill] = level
@@ -294,12 +287,11 @@ class Dataset: #modified class
                 required_level = course[0][skill_id]
                 provided_level = course[1][skill_id]
 
-                # Case 1: Course both requires and provides the skill
-                if provided_level > 0 and required_level > 0:
-                    course[0][skill_id] = 0
-                # Case 2: Course requires but doesn't provide the skill (inconsistent case)
-                elif required_level > 0 and provided_level == 0:
-                    course[0][skill_id] = 0
+                if provided_level != 0 and provided_level <= required_level:
+                    if provided_level == 1:
+                        course[0][skill_id] = 0
+                    else:
+                        course[0][skill_id] = provided_level - 1
 
                 
 
@@ -364,53 +356,101 @@ class Dataset: #modified class
         """
         enrollable_courses = {}
         for i, course in enumerate(self.courses):
+            required_matching = matchings.learner_course_required_matching(
+                learner, course
+            )
             provided_matching = matchings.learner_course_provided_matching(
                 learner, course
             )
-            # Only check if the course provides any new skills
-            if provided_matching < 1.0 and provided_matching > 0.0:  # Learner doesn't have all skills the course provides and the course provides at least one skill
+            if required_matching >= threshold and provided_matching < 1.0:
                 enrollable_courses[i] = course
         return enrollable_courses
 
     def get_learner_acquired_skills(self, learner):
-        """Get the skills that a learner currently possesses.
+        """Get the skills that a learner currently possesses with their mastery levels.
         
         Args:
-            learner (np.ndarray): Learner's skill vector where 1 indicates
-                                possession of a skill and 0 indicates absence.
+            learner (np.ndarray): Learner's skill vector where each value indicates
+                                the mastery level of that skill (0 means no skill).
             
         Returns:
-            set: Set of skill indices that the learner has acquired (value = 1)
+            dict: Dictionary mapping skill indices to their mastery levels
         """
-        return set(np.nonzero(learner)[0])
+        # Get all non-zero skills and their mastery levels
+        skills = np.nonzero(learner)[0]
+        return {skill: learner[skill] for skill in skills}
 
     def get_learner_missing_skills(self, learner):
-        """Identify skills that a learner needs to acquire to be eligible for jobs.
+        """Identify skills that a learner needs to acquire or improve to be eligible for jobs.
         
         This function analyzes the gap between a learner's current skills and
-        the skills required by available jobs. It helps identify which skills
-        the learner should acquire to improve their job eligibility.
+        the skills required by available jobs. It considers two types of missing skills:
+        1. Completely missing skills (not in learner's skill set)
+        2. Partially missing skills (in learner's skill set but with lower mastery level)
+        
+        The function examines ALL jobs in the dataset to:
+        - Collect all skills required by any job
+        - For each skill, track the highest mastery level required
+        - For partially missing skills, track the largest gap between required and current level
         
         Args:
-            learner (np.ndarray): Learner's skill vector where 1 indicates
-                                possession of a skill and 0 indicates absence.
+            learner (np.ndarray): Learner's skill vector where each value indicates
+                                the mastery level of that skill (0 means no skill).
             
         Returns:
-            set: Set of distinct skill indices that the learner needs to learn
-                 to be eligible for jobs. These are skills required by jobs but
-                 not currently possessed by the learner.
+            dict: Dictionary mapping skill indices to their required mastery levels.
+                 For completely missing skills, the value is the required mastery level.
+                 For partially missing skills, the value is the gap between required
+                 and current mastery level.
+                 
+        Example:
+            If learner has skill 1 with level 1 and skill 3 with level 1:
+            - Job 1 requires skill 1 (level 3) and skill 3 (level 2)
+            - Job 2 requires skill 1 (level 2) and skill 2 (level 1)
+            - Job 3 requires skill 0 (level 2) and skill 3 (level 3)
+            
+            Result will be:
+            {
+                0: 2,  # completely missing skill
+                1: 2,  # partially missing (current: 1, required: 3, gap: 2)
+                2: 1,  # completely missing skill
+                3: 3   # partially missing (current: 1, required: 3, gap: 2)
+            }
         """
-        # Get learner's current skills
+        # Get learner's current skills and their mastery levels
+        # Returns a dict mapping skill indices to their current mastery levels
         learner_skills = self.get_learner_acquired_skills(learner)
         
-        # Get all required skills from jobs
-        job_required_skills = set()
-        for job in self.jobs:
-            job_skills = set(np.nonzero(job)[0])
-            job_required_skills.update(job_skills)
+        # Dictionary to store missing skills and their required mastery levels
+        # Key: skill index
+        # Value: highest required mastery level from all jobs
+        missing_skills = {}
         
-        # Get missing skills (skills required by jobs but not possessed by learner)
-        missing_skills = job_required_skills - learner_skills
+        # Iterate through ALL jobs in the dataset
+        for job in self.jobs:
+            # Get skills required by this job and their mastery levels
+            # Only include skills with mastery level > 0
+            job_skills = {skill: level for skill, level in enumerate(job) if level > 0}
+            
+            # Check each required skill in this job
+            for skill, required_level in job_skills.items():
+                if skill not in learner_skills:
+                    # Case 1: Completely missing skill
+                    # Add to missing_skills if:
+                    # - Skill not yet in missing_skills, OR
+                    # - This job requires a higher level than previously recorded
+                    if skill not in missing_skills or required_level > missing_skills[skill]:
+                        missing_skills[skill] = required_level
+                elif learner_skills[skill] < required_level:
+                    # Case 2: Partially missing skill (learner has it but level too low)
+                    # Calculate the gap between required and current level
+                    gap = required_level - learner_skills[skill]
+                    
+                    # Update missing_skills if:
+                    # - Skill not yet in missing_skills, OR
+                    # - This job has a larger gap than previously recorded
+                    if skill not in missing_skills or gap > (missing_skills[skill] - learner_skills[skill]):
+                        missing_skills[skill] = required_level
         
         return missing_skills
 
@@ -479,13 +519,13 @@ class Dataset: #modified class
         attractiveness /= len(self.learners)
         return attractiveness
 
-    def get_learner_base_skills(self, learner):
-        """Get the base skills (indices) that a learner has.
+    # def get_learner_base_skills(self, learner):
+    #     """Get the base skills (indices) that a learner has.
         
-        Args:
-            learner (np.ndarray): Learner's skill vector
+    #     Args:
+    #         learner (np.ndarray): Learner's skill vector
             
-        Returns:
-            set: Set of skill indices that the learner has (value = 1)
-        """
-        return set(np.nonzero(learner)[0])
+    #     Returns:
+    #         set: Set of skill indices that the learner has (value = 1)
+    #     """
+    #     return set(np.nonzero(learner)[0])

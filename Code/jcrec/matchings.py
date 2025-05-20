@@ -2,7 +2,7 @@ import numpy as np
 from typing import Tuple, Union, Dict, Set
 
 
-def matching(level1: np.ndarray, level2: np.ndarray) -> float:
+def matching_binary(level1: np.ndarray, level2: np.ndarray) -> float:
     """
     Compute the matching score between two skill vectors in binary case.
     Only checks if skills exist (non-zero) in both vectors, regardless of their levels.
@@ -38,34 +38,34 @@ def matching(level1: np.ndarray, level2: np.ndarray) -> float:
     # Return the proportion of required skills that exist
     return matching_skills / len(skills2)
 
-# def matching_ori(level1, level2): # use for original case : mastery level
-#     """
-#     Compute the matching score between two skill vectors in original case.
-#     Takes into account the mastery levels of skills.
+def matching(level1, level2):
+    """
+    Compute the matching score between two skill vectors in original case.
+    Takes into account the mastery levels of skills.
 
-#     Args:
-#         level1 (np.ndarray): An array of skills for the first entity (e.g., learner).
-#         level2 (np.ndarray): An array of skills for the second entity (e.g., job or course).
+    Args:
+        level1 (np.ndarray): An array of skills for the first entity (e.g., learner).
+        level2 (np.ndarray): An array of skills for the second entity (e.g., job or course).
 
-#     Returns:
-#         float: A matching score between 0 and 1, where:
-#             - 1.0 means perfect match (all required skills at required levels)
-#             - 0.0 means no match
-#             - Values in between represent partial matches based on skill levels
-#     """
-#     # get the minimum of the two arrays
-#     minimum_skill = np.minimum(level1, level2)
+    Returns:
+        float: A matching score between 0 and 1, where:
+            - 1.0 means perfect match (all required skills at required levels)
+            - 0.0 means no match
+            - Values in between represent partial matches based on skill levels
+    """
+    # get the minimum of the two arrays
+    minimum_skill = np.minimum(level1, level2)
 
-#     # get the indices of the non zero elements of the job skill levels
-#     nonzero_indices = np.nonzero(level2)[0]
+    # get the indices of the non zero elements of the job skill levels
+    nonzero_indices = np.nonzero(level2)[0]
 
-#     # divide the minimum by the job skill levels on the non zero indices
-#     matching = minimum_skill[nonzero_indices] / level2[nonzero_indices]
+    # divide the minimum by the job skill levels on the non zero indices
+    matching = minimum_skill[nonzero_indices] / level2[nonzero_indices]
 
-#     # sum the result and divide by the number of non zero job skill levels
-#     matching = np.sum(matching) / np.count_nonzero(level2)
+    # sum the result and divide by the number of non zero job skill levels
+    matching = np.sum(matching) / np.count_nonzero(level2)
 
-#     return matching
+    return matching
 
 def learner_job_matching(learner: np.ndarray, job: np.ndarray) -> float:
     """
@@ -89,25 +89,25 @@ def learner_job_matching(learner: np.ndarray, job: np.ndarray) -> float:
 
     return matching(learner, job)
 
-# def learner_course_required_matching(learner, course):
-#     """
-#     Compute the matching score between a learner and a course's required skills.
-#     Always uses original matching as required skills have mastery levels.
+def learner_course_required_matching(learner, course):
+    """
+    Compute the matching score between a learner and a course's required skills.
+    Always uses original matching as required skills have mastery levels.
 
-#     Args:
-#         learner (np.ndarray): Learner's skill vector
-#         course (np.ndarray): Course's skills array [required, provided]
+    Args:
+        learner (np.ndarray): Learner's skill vector
+        course (np.ndarray): Course's skills array [required, provided]
 
-#     Returns:
-#         float: Matching score between 0 and 1
-#     """
-#     required_course = course[0] #required skills
+    Returns:
+        float: Matching score between 0 and 1
+    """
+    required_course = course[0] #required skills
 
-#     # check if the course has no required skills and return 1
-#     if not np.any(required_course): # not( true if at least one element is not 0 )
-#         return 1.0
+    # check if the course has no required skills and return 1
+    if not np.any(required_course): # not( true if at least one element is not 0 )
+        return 1.0
 
-#     return matching_ori(learner, required_course)
+    return matching(learner, required_course)
 
 def learner_course_provided_matching(learner: np.ndarray, course: np.ndarray) -> float:
     """

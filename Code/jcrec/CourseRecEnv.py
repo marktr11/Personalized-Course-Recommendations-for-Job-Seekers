@@ -284,7 +284,9 @@ class CourseRecEnv(gym.Env):
 
         # Skip-expertise case: use new metrics and utility
         provided_matching = matchings.learner_course_provided_matching(learner, course)
-        if provided_matching == 1.0:
+        required_matching = matchings.learner_course_required_matching(learner, course)
+        
+        if required_matching < self.threshold or provided_matching >= 1.0:
             observation = self._get_obs()
             reward = -1
             terminated = True

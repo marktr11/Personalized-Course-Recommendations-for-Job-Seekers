@@ -32,13 +32,13 @@ seed: 42                                              # Random seed for reproduc
 
 # Model Configuration
 baseline: false                                        # Model type:
-                                                       # true: No-Mastery-Levels-only model (baseline)
-                                                       # false: UIR-No-Mastery-Levels model
+                                                       # true: original model (baseline)
+                                                       # false: W-UIR-Mastery-Levels model
 feature: "Weighted-Usefulness-as-Rwd"                         # Feature type for non-baseline model 
 #options: "Usefulness-as-Rwd" or "Weighted-Usefulness-as-Rwd"
 
 # Purpose
 # This configuration is designed to compare two approaches:
-# 1. Baseline model: No-Mastery-Levels-only approach
-# 2. Enhanced model: UIR-No-Mastery-Levels with Usefulness as reward
+# 1. Baseline model: Original model
+# 2. Enhanced model: W-UIR-Mastery-Levels with Usefulness as reward
 
