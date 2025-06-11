@@ -30,16 +30,6 @@ This module is designed to work with the main pipeline.py in the following ways:
       python pipeline.py --config config/run.yaml
       ```
 
-3. MLflow Integration:
-   - The weights found by this module will be logged as parameters in MLflow
-   - They will appear in the MLflow UI under the run parameters
-   - The results (heatmap, best weights) will be saved as artifacts
-
-4. Usage in pipeline.py:
-   - The weights are used when creating the CourseRecEnv in the Reinforce class
-   - They affect the reward calculation during model training
-   - The results influence the model's performance metrics logged in MLflow
-
 Usage Instructions:
 -----------------
 1. Basic Usage:

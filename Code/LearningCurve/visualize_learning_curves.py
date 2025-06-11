@@ -97,12 +97,17 @@ def load_evaluation_data(file_path):
         file_path (str): Path to the evaluation data file
         
     Returns:
-        tuple: (steps, metrics) arrays from the data file
+        tuple: (steps, metrics, start_step) arrays from the data file
     """
     data = np.loadtxt(file_path)
     steps = data[:, 0]
-    metrics = data[:, 1]
-    return steps, metrics
+    metrics = data[:, 1]  # Using the first metric column
+    start_step = steps[0]  # Store the starting step
+    
+    # Normalize steps to start from 0 for plotting
+    steps = steps - start_step
+    
+    return steps, metrics, start_step
 
 def get_experiment_title(model_name, k, is_clustered):
     """Generate a descriptive title for the experiment.
@@ -219,7 +224,7 @@ def plot_learning_curves(results_dir):
         new_plots += 1
         
         # Load data
-        steps, metrics = load_evaluation_data(file_path)
+        steps, metrics, start_step = load_evaluation_data(file_path)
         
         # Create figure
         plt.figure(figsize=(15, 8))
@@ -240,6 +245,9 @@ def plot_learning_curves(results_dir):
         
         # Make y-axis ticks more readable
         plt.tick_params(axis='both', which='major', labelsize=12)
+        
+        # Format y-axis to show plain numbers instead of scientific notation
+        plt.ticklabel_format(style='plain', axis='y')
         
         # Adjust layout and save
         plt.tight_layout()
@@ -268,8 +276,8 @@ def compare_clustering_effect(results_dir, model_name, k):
     
     # Find result files for both cases in the specified branch
     branch_dir = os.path.join(results_dir, BRANCH_NAME, "data")
-    clustered_pattern = f"all_{model_name}_k_{k}_*clusters_auto*.txt"
-    no_cluster_pattern = f"all_{model_name}_k_{k}_run_*.txt"
+    clustered_pattern = f"all_{model_name}_k_{k}_total_steps_*_clusters_auto_run_*.txt"
+    no_cluster_pattern = f"all_{model_name}_k_{k}_total_steps_*_run_*.txt"
     
     clustered_files = glob.glob(os.path.join(branch_dir, clustered_pattern))
     no_cluster_files = glob.glob(os.path.join(branch_dir, no_cluster_pattern))
@@ -289,23 +297,57 @@ def compare_clustering_effect(results_dir, model_name, k):
             for f in no_cluster_files:
                 print(f"- {os.path.basename(f)}")
         return
+    
+    # Print debug information
+    print("\nDebug Information:")
+    print(f"Clustered file: {os.path.basename(clustered_files[0])}")
+    print(f"No cluster file: {os.path.basename(no_cluster_files[0])}")
+    
+    # Check if we're reading the same file
+    if clustered_files[0] == no_cluster_files[0]:
+        print("\nWARNING: Reading the same file for both clustered and non-clustered data!")
+        return
         
     # Load data
-    clustered_steps, clustered_metrics = load_evaluation_data(clustered_files[0])
-    no_cluster_steps, no_cluster_metrics = load_evaluation_data(no_cluster_files[0])
+    clustered_steps, clustered_metrics, clustered_start = load_evaluation_data(clustered_files[0])
+    no_cluster_steps, no_cluster_metrics, no_cluster_start = load_evaluation_data(no_cluster_files[0])
+    
+    # Print data statistics
+    print("\nData Statistics:")
+    print("Clustered data:")
+    print(f"- Number of points: {len(clustered_steps)}")
+    print(f"- Training started at step: {clustered_start:,}")
+    print(f"- Steps range: {clustered_start:,} to {clustered_start + clustered_steps[-1]:,}")
+    print(f"- Metrics range: {min(clustered_metrics):.4f} to {max(clustered_metrics):.4f}")
+    print(f"- First few metrics: {clustered_metrics[:5]}")
+    
+    print("\nNo cluster data:")
+    print(f"- Number of points: {len(no_cluster_steps)}")
+    print(f"- Training started at step: {no_cluster_start:,}")
+    print(f"- Steps range: {no_cluster_start:,} to {no_cluster_start + no_cluster_steps[-1]:,}")
+    print(f"- Metrics range: {min(no_cluster_metrics):.4f} to {max(no_cluster_metrics):.4f}")
+    print(f"- First few metrics: {no_cluster_metrics[:5]}")
+    
+    # Get total steps from filenames
+    clustered_total_steps = int(os.path.basename(clustered_files[0]).split('_')[4])
+    no_cluster_total_steps = int(os.path.basename(no_cluster_files[0]).split('_')[4])
     
     # Create figure
     plt.figure(figsize=(15, 8))
     
     # Plot both curves
-    plt.plot(clustered_steps, clustered_metrics, 'b-', linewidth=2, label='With Clustering')
-    plt.plot(no_cluster_steps, no_cluster_metrics, 'r--', linewidth=2, label='Without Clustering')
+    plt.plot(clustered_steps, clustered_metrics, 'b-', linewidth=2, 
+             label=f'With Clustering (Started at {clustered_start:,} steps)')
+    plt.plot(no_cluster_steps, no_cluster_metrics, 'r--', linewidth=2, 
+             label=f'Without Clustering (Started at {no_cluster_start:,} steps)')
     
-    plt.xlabel('Training Steps', fontsize=14, fontweight='bold')
+    plt.xlabel('Training Steps (Normalized)', fontsize=14, fontweight='bold')
     plt.ylabel('Average Applicable Jobs', fontsize=14, fontweight='bold')
     
-    # Set title
-    title = f"{model_name.upper()} k={k} - Clustering Comparison"
+    # Set title with training information
+    title = (f"{model_name.upper()} k={k} - Clustering Comparison\n"
+             f"Clustered: {clustered_start:,} to {clustered_start + clustered_steps[-1]:,} steps, "
+             f"No Clustering: {no_cluster_start:,} to {no_cluster_start + no_cluster_steps[-1]:,} steps")
     plt.title(title, fontsize=16, fontweight='bold', pad=20)
     
     plt.grid(True, alpha=0.3)
@@ -316,6 +358,9 @@ def compare_clustering_effect(results_dir, model_name, k):
     # Make y-axis ticks more readable
     plt.tick_params(axis='both', which='major', labelsize=12)
     
+    # Format y-axis to show plain numbers instead of scientific notation
+    plt.ticklabel_format(style='plain', axis='y')
+    
     # Create output filename
     output_filename = f"{model_name}_k{k}_clustering_comparison.png"
     output_path = os.path.join(plots_dir, output_filename)
@@ -325,7 +370,7 @@ def compare_clustering_effect(results_dir, model_name, k):
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(f"Created comparison plot: {output_filename}")
+    print(f"\nCreated comparison plot: {output_filename}")
 
 def compare_models(results_dir):
     """Compare models with and without clustering for different k values."""
@@ -363,9 +408,9 @@ def compare_models(results_dir):
     for model in models:
         for is_clustered in [True, False]:
             if is_clustered:
-                pattern = f"all_{model}_k_*_total_steps_500000_clusters_auto_run_*.txt"
+                pattern = f"all_{model}_k_*_total_steps_*_clusters_auto_run_*.txt"
             else:
-                pattern = f"all_{model}_k_*_total_steps_500000_run_*.txt"
+                pattern = f"all_{model}_k_*_total_steps_*_run_*.txt"
             
             files = glob.glob(os.path.join(branch_dir, pattern))
             for file in files:
@@ -395,13 +440,13 @@ def compare_models(results_dir):
         for model in models:
             for is_clustered in [True, False]:
                 if is_clustered:
-                    pattern = f"all_{model}_k_{k}_total_steps_500000_clusters_auto_run_*.txt"
+                    pattern = f"all_{model}_k_{k}_total_steps_*_clusters_auto_run_*.txt"
                 else:
-                    pattern = f"all_{model}_k_{k}_total_steps_500000_run_*.txt"
+                    pattern = f"all_{model}_k_{k}_total_steps_*_run_*.txt"
                 
                 files = glob.glob(os.path.join(branch_dir, pattern))
                 if files:
-                    steps, metrics = load_evaluation_data(files[0])
+                    steps, metrics, start_step = load_evaluation_data(files[0])
                     all_steps.extend(steps)
                     all_metrics.extend(metrics)
                     last_points.append({
@@ -423,14 +468,14 @@ def compare_models(results_dir):
         for model in models:
             for is_clustered in [True, False]:
                 if is_clustered:
-                    pattern = f"all_{model}_k_{k}_total_steps_500000_clusters_auto_run_*.txt"
+                    pattern = f"all_{model}_k_{k}_total_steps_*_clusters_auto_run_*.txt"
                 else:
-                    pattern = f"all_{model}_k_{k}_total_steps_500000_run_*.txt"
+                    pattern = f"all_{model}_k_{k}_total_steps_*_run_*.txt"
                 
                 files = glob.glob(os.path.join(branch_dir, pattern))
                 if files:
                     # Load and plot data
-                    steps, metrics = load_evaluation_data(files[0])
+                    steps, metrics, start_step = load_evaluation_data(files[0])
                     
                     # Define line style and label
                     linestyle = '-' if is_clustered else '--'
@@ -485,6 +530,9 @@ def compare_models(results_dir):
         
         # Make y-axis ticks more readable
         plt.tick_params(axis='both', which='major', labelsize=12)
+        
+        # Format y-axis to show plain numbers instead of scientific notation
+        plt.ticklabel_format(style='plain', axis='y')
         
         # Create output filename
         output_filename = f"models_mastery_levels_k{k}_comparison.png"

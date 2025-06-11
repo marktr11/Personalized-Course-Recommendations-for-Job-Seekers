@@ -24,9 +24,9 @@ nb_jobs: 100                                          # Number of jobs to includ
 
 # Model Parameters
 threshold: 0.8                                         # Minimum matching threshold for job eligibility
-k: 5                                                  # Number of course recommendations to generate
+k: 2                                                  # Number of course recommendations to generate
 model: dqn                                            # Reinforcement learning algorithm (ppo, dqn, a2c)
-total_steps: 5                                  # Total training steps
+total_steps: 5000000                                # Total training steps
 eval_freq: 1000                                       # Evaluation frequency during training
 nb_runs: 1                                            # Number of independent runs
 seed: 42                                              # Random seed for reproducibility

@@ -57,6 +57,11 @@ class CourseRecEnv(gym.Env):
             k (int): Maximum number of course recommendations per learner
             is_training (bool): Whether this is a training environment
         """
+        print(f"\nInitializing CourseRecEnv:")
+        print(f"use_clustering: {hasattr(dataset, 'config') and dataset.config.get('use_clustering', False)}")
+        print(f"is_training: {is_training}")
+    
+        
         self.dataset = dataset
         self.threshold = threshold
         self.k = k
@@ -75,12 +80,13 @@ class CourseRecEnv(gym.Env):
             low=0, high=self.max_level, shape=(self.nb_skills,), dtype=np.int32)
         self.action_space = gym.spaces.Discrete(self.nb_courses)
         
-        # Initialize clustering if enabled in config
-        self.use_clustering = hasattr(dataset, 'config') and dataset.config.get("use_clustering", False)
+        # Initialize clustering only in training environment
+        self.use_clustering = False
         self.clusterer = None
         self.prev_reward = None
         
-        if self.use_clustering:
+        if self.is_training and hasattr(dataset, 'config') and dataset.config.get("use_clustering", False):
+            self.use_clustering = True
             self.clusterer = CourseClusterer(
                 n_clusters=dataset.config.get("n_clusters", 5),
                 random_state=dataset.config.get("seed", 42),
@@ -88,8 +94,8 @@ class CourseRecEnv(gym.Env):
                 max_clusters=dataset.config.get("max_clusters", 10),
                 config=dataset.config.get("clustering", {})
             )
-            # Only fit clusters in training environment
-            if self.is_training and self.clusterer.course_clusters is None:
+            # Fit clusters in training environment
+            if self.clusterer.course_clusters is None:
                 self.clusterer.fit_course_clusters(dataset.courses)
         
         # Initialize environment state
@@ -177,7 +183,7 @@ class CourseRecEnv(gym.Env):
         1. Recommends a course based on the action
         2. Updates the learner's skills if the course is valid
         3. Calculates the reward based on number of applicable jobs
-        4. Adjusts reward using clustering if enabled
+        4. Adjusts reward using clustering if enabled (only in training)
         5. Checks if the episode should terminate
         
         Args:
@@ -212,8 +218,8 @@ class CourseRecEnv(gym.Env):
         # Set reward as number of applicable jobs
         reward = info["nb_applicable_jobs"]
 
-        # Adjust reward using clustering if enabled
-        if self.use_clustering and self.clusterer is not None:
+        # Adjust reward using clustering only in training environment
+        if self.use_clustering and self.clusterer is not None and self.is_training:
             reward = self.clusterer.adjust_reward(
                 course_idx=action,
                 original_reward=reward,

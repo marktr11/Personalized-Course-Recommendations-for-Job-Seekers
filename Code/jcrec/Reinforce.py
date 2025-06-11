@@ -1,7 +1,5 @@
 import os
 import json
-import mlflow
-
 import numpy as np
 from time import process_time
 from stable_baselines3 import DQN, A2C, PPO
@@ -25,7 +23,6 @@ class Reinforce:
     - Mastery levels (1-3) for skills
     - Optional clustering-based reward adjustment
     - Comprehensive evaluation metrics
-    - MLflow integration for experiment tracking
     
     Attributes:
         dataset: Dataset object containing learners, jobs, and courses data
@@ -142,7 +139,6 @@ class Reinforce:
         5. Saves results:
            - Intermediate evaluation results to text file
            - Final metrics and recommendations to JSON file
-           - Logs metrics to MLflow if active
         
         The results are saved in two files:
         - A text file with intermediate evaluation results during training
@@ -152,15 +148,10 @@ class Reinforce:
 
         avg_l_attrac_debut = self.dataset.get_avg_learner_attractiveness() #debut
         print(f"The average attractiveness of the learners is {avg_l_attrac_debut:.2f}")
-        if mlflow.active_run():
-            mlflow.log_metric("original_attractiveness", avg_l_attrac_debut) # << LOG METRIC 1
-
         results["original_attractiveness"] = avg_l_attrac_debut
 
         avg_app_j_debut = self.dataset.get_avg_applicable_jobs(self.threshold) #debut
         print(f"The average nb of applicable jobs per learner is {avg_app_j_debut:.2f}")
-        if mlflow.active_run():
-            mlflow.log_metric("original_applicable_jobs", avg_app_j_debut) # << LOG METRIC 2
         results["original_applicable_jobs"] = avg_app_j_debut
 
         # Train the model using train env
@@ -200,17 +191,10 @@ class Reinforce:
 
         avg_l_attrac_fin = self.dataset.get_avg_learner_attractiveness() #fin
         print(f"The new average attractiveness of the learners is {avg_l_attrac_fin:.2f}")
-        if mlflow.active_run():
-            mlflow.log_metric("new_attractiveness", avg_l_attrac_fin)  # << LOG METRIC 3
-
         results["new_attractiveness"] = avg_l_attrac_fin
 
         avg_app_j_fin = self.dataset.get_avg_applicable_jobs(self.threshold)
         print(f"The new average nb of applicable jobs per learner is {avg_app_j_fin:.2f}")
-        if mlflow.active_run():
-            mlflow.log_metric("new_applicable_jobs", avg_app_j_fin) # << LOG METRIC 4
-
-
         results["new_applicable_jobs"] = avg_app_j_fin
 
         results["recommendations"] = recommendations

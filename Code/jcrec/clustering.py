@@ -45,6 +45,8 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import os
 from sklearn.decomposition import PCA
+import seaborn as sns
+import pandas as pd
 
 class CourseClusterer:
     """Class for clustering courses and adjusting rewards based on cluster membership.
@@ -141,42 +143,121 @@ class CourseClusterer:
         print(f"Optimal number of clusters: {optimal_k}")
         return optimal_k
         
+    def visualize_feature_pairs(self, features_scaled):
+        """Visualize relationships between features using correlation matrix.
+        
+        Args:
+            features_scaled: Scaled features used for clustering
+        """
+        # Create DataFrame for easier plotting
+        feature_names = ['Coverage', 'Required Entropy', 'Provided Entropy', 
+                        'Avg Level Gap', 'Max Level Gap']
+        df = pd.DataFrame(features_scaled, columns=feature_names)
+        
+        # Calculate correlation matrix
+        corr_matrix = df.corr()
+        
+        # Create figure with larger size
+        plt.figure(figsize=(10, 8))
+        
+        # Plot correlation matrix
+        plt.imshow(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1)
+        
+        # Add correlation values with bold text
+        for i in range(len(feature_names)):
+            for j in range(len(feature_names)):
+                plt.text(j, i, f'{corr_matrix.iloc[i, j]:.2f}',
+                        ha='center', va='center',
+                        color='white' if abs(corr_matrix.iloc[i, j]) > 0.5 else 'black',
+                        fontsize=12,
+                        fontweight='bold')
+        
+        # Add colorbar with larger font
+        cbar = plt.colorbar(label='Correlation Coefficient')
+        cbar.ax.tick_params(labelsize=12)
+        cbar.ax.set_ylabel('Correlation Coefficient', fontsize=14, fontweight='bold')
+        
+        # Add labels with larger font
+        plt.xticks(range(len(feature_names)), feature_names, rotation=45, ha='right', fontsize=12, fontweight='bold')
+        plt.yticks(range(len(feature_names)), feature_names, fontsize=12, fontweight='bold')
+        
+        # Add title with larger font
+        plt.title('Feature Correlation Matrix', pad=20, fontsize=16, fontweight='bold')
+        
+        # Adjust layout
+        plt.tight_layout()
+        
+        # Save plot
+        plot_path = os.path.join(self.clustering_dir, 'feature_correlation.png')
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print(f"\nSaved correlation matrix to: {plot_path}")
+        
     def fit_course_clusters(self, courses):
-        """Fit clusters for courses based on their required and provided skills."""
+        """Fit clusters for courses based on their required and provided skills.
+        
+        This method performs the following steps:
+        1. Extract required and provided skills from courses
+        2. Calculate 5 features for each course:
+           - Coverage: Overall skill coverage ratio
+           - Required Entropy: Diversity of required skills
+           - Provided Entropy: Diversity of provided skills
+           - Avg Level Gap: Average difference between required and provided levels
+           - Max Level Gap: Maximum difference between required and provided levels
+        3. Scale features to have zero mean and unit variance
+        4. Find optimal number of clusters if auto_clusters is enabled
+        5. Perform K-means clustering on all courses
+        6. Visualize results using PCA and feature pairs
+        
+        Args:
+            courses: Array of courses, each containing required and provided skills
+        """
         print("\nStarting course clustering...")
-        required_skills = courses[:, 0]  # Get required skills
-        provided_skills = courses[:, 1]  # Get provided skills
         
-        n_skills = required_skills.shape[1]
-        max_level = 3  # Maximum skill level is 3
+        # Extract required and provided skills from courses
+        # courses[:, 0] contains required skills for all courses
+        # courses[:, 1] contains provided skills for all courses
+        required_skills = courses[:, 0]  # Shape: (n_courses, n_skills)
+        provided_skills = courses[:, 1]  # Shape: (n_courses, n_skills)
         
-        # 1. Coverage features 
-        required_coverage = np.sum(required_skills, axis=1) / (n_skills * max_level)
-        provided_coverage = np.sum(provided_skills, axis=1) / (n_skills * max_level)
-        coverage = (required_coverage + provided_coverage) / 2
+        n_skills = required_skills.shape[1]  # Total number of skills
+        max_level = 3  # Maximum skill level in the system
         
-        # 2. Entropy features 
+        # 1. Coverage features: Calculate how much of the total possible skill levels are covered
+        # For each course, calculate coverage as ratio of actual levels to maximum possible levels
+        required_coverage = np.sum(required_skills, axis=1) / (n_skills * max_level)  # Shape: (n_courses,)
+        provided_coverage = np.sum(provided_skills, axis=1) / (n_skills * max_level)  # Shape: (n_courses,)
+        coverage = (required_coverage + provided_coverage) / 2  # Average coverage
+        
+        # 2. Entropy features: Measure the diversity of skill levels
+        # Higher entropy means more diverse/balanced distribution of skill levels
+        # For required skills
         required_distribution = required_skills / (np.sum(required_skills, axis=1, keepdims=True) + 1e-10)
         required_entropy = -np.sum(required_distribution * np.log2(required_distribution + 1e-10), axis=1)
         
+        # For provided skills
         provided_distribution = provided_skills / (np.sum(provided_skills, axis=1, keepdims=True) + 1e-10)
         provided_entropy = -np.sum(provided_distribution * np.log2(provided_distribution + 1e-10), axis=1)
         
-        # 3. Level gap features 
-        level_gap = np.abs(provided_skills - required_skills)
-        avg_level_gap = np.mean(level_gap, axis=1)
-        max_level_gap = np.max(level_gap, axis=1)
+        # 3. Level gap features: Measure the difference between required and provided skill levels
+        # For each skill in each course, calculate absolute difference between required and provided levels
+        level_gap = np.abs(provided_skills - required_skills)  # Shape: (n_courses, n_skills)
+        avg_level_gap = np.mean(level_gap, axis=1)  # Average gap across all skills for each course
+        max_level_gap = np.max(level_gap, axis=1)  # Maximum gap across all skills for each course
         
-        # Combine features (reduced to 5D)
+        # Combine all features into a single matrix
+        # Each row represents a course, each column represents a feature
         self.features = np.column_stack([
-            coverage,                    # 1D: Overall coverage
-            required_entropy,           # 2D: Required skills diversity
-            provided_entropy,           # 3D: Provided skills diversity
-            avg_level_gap,             # 4D: Average gap between required and provided
-            max_level_gap              # 5D: Maximum gap between required and provided
-        ])
+            coverage,                    # 1D: Overall coverage of skills
+            required_entropy,           # 2D: Diversity of required skills
+            provided_entropy,           # 3D: Diversity of provided skills
+            avg_level_gap,             # 4D: Average gap between required and provided levels
+            max_level_gap              # 5D: Maximum gap between required and provided levels
+        ])  # Shape: (n_courses, 5)
         
-        # Scale features
+        # Scale features to have zero mean and unit variance
+        # This is important for K-means clustering
         features_scaled = self.scaler.fit_transform(self.features)
         
         # Find optimal number of clusters if auto_clusters is enabled
@@ -184,17 +265,18 @@ class CourseClusterer:
             self.optimal_k = self.find_optimal_clusters(features_scaled)
             self.n_clusters = self.optimal_k
         
-        # Perform K-means clustering
+        # Perform K-means clustering on all courses
+        # This will assign each course to one of the clusters
         kmeans = KMeans(
             n_clusters=self.n_clusters,
             random_state=self.random_state,
-            n_init=10
+            n_init=10  # Run 10 times with different initializations and pick the best
         )
-        self.course_clusters = kmeans.fit_predict(features_scaled)
+        self.course_clusters = kmeans.fit_predict(features_scaled)  # Shape: (n_courses,)
         
-        # Store cluster centers and inertia
-        self.cluster_centers_ = kmeans.cluster_centers_
-        self.inertia_ = kmeans.inertia_
+        # Store cluster centers and inertia for later use
+        self.cluster_centers_ = kmeans.cluster_centers_  # Shape: (n_clusters, 5)
+        self.inertia_ = kmeans.inertia_  # Sum of squared distances to closest centroid
         
         # Print cluster information
         print("\nCluster Information:")
@@ -205,14 +287,37 @@ class CourseClusterer:
         # Visualize clusters using PCA
         self.visualize_clusters(features_scaled)
         
+        # Visualize feature relationships
+        self.visualize_feature_pairs(features_scaled)
+        
     def visualize_clusters(self, features_scaled):
-        """Visualize the clusters using PCA for dimensionality reduction."""
+        """Visualize the clusters using PCA for dimensionality reduction.
+        
+        This method:
+        1. Reduces the 5D feature space to 2D using PCA
+        2. Creates a scatter plot of courses in the reduced space
+        3. Shows cluster centers and explained variance
+        4. Prints feature contributions to each principal component
+        
+        The PCA components (PC1, PC2) are linear combinations of the original features.
+        The coefficients (feature contributions) show:
+        - Positive values: Feature increases when the PC increases
+        - Negative values: Feature decreases when the PC increases
+        - Magnitude: How strongly the feature influences the PC
+        
+        For example, if PC1 has:
+        - Coverage: 0.562 (positive)
+        - Provided Entropy: -0.516 (negative)
+        This means courses with high PC1 values tend to have:
+        - High coverage
+        - Low provided entropy
+        """
         # Apply PCA to reduce to 2D
         pca = PCA(n_components=2)
         features_2d = pca.fit_transform(features_scaled)
         
-        # Create figure
-        plt.figure(figsize=(12, 8))
+        # Create figure with larger size and higher DPI
+        plt.figure(figsize=(12, 8), dpi=300)
         
         # Plot clusters
         for i in range(self.n_clusters):
@@ -237,31 +342,46 @@ class CourseClusterer:
             label='Cluster Centers'
         )
         
-        # Add labels and title
-        plt.xlabel('First Principal Component')
-        plt.ylabel('Second Principal Component')
-        plt.title('Course Clusters (PCA Visualization)')
+        # Add labels and title with larger font size
+        plt.xlabel('First Principal Component', fontsize=14, fontweight='bold')
+        plt.ylabel('Second Principal Component', fontsize=14, fontweight='bold')
+        plt.title('Course Clusters (PCA Visualization)', fontsize=16, fontweight='bold', pad=20)
         
-        # Add explained variance ratio
+        # Add explained variance ratio with larger font
         explained_variance = pca.explained_variance_ratio_
         plt.figtext(
-            0.02, 0.02,
+            0.73, 0.02,
             f'Explained variance: PC1={explained_variance[0]:.2%}, PC2={explained_variance[1]:.2%}',
-            fontsize=10
+            fontsize=12,
+            fontweight='bold',
+            bbox=dict(facecolor='white', alpha=0.8, edgecolor='none', pad=5)
         )
         
-        # Add legend
-        plt.legend()
+        # Add legend outside the plot with larger font
+        plt.legend(
+            loc='center left',
+            bbox_to_anchor=(1.05, 0.5),
+            prop={'size': 12, 'weight': 'bold'},
+            frameon=True,
+            title='Clusters',
+            title_fontsize=14
+        )
         
-        # Save plot
+        # Adjust layout to prevent label cutoff
+        plt.tight_layout()
+        
+        # Save plot with high quality
         plot_path = os.path.join(self.clustering_dir, f'cluster_visualization_pca.png')
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.close()
         
-        # Print feature importance
-        print("\nFeature Importance in Principal Components:")
+        # Print feature contributions to principal components
+        print("\nFeature Contribution to Principal Components:")
+        print("(Values show how much each feature contributes to the principal components)")
+        print("(Positive values mean the feature increases with the PC, negative values mean it decreases)")
+        print("(The magnitude shows how strongly the feature influences the PC)")
         for i, component in enumerate(pca.components_):
-            print(f"\nPC{i+1}:")
+            print(f"\nPC{i+1} (Explained variance: {pca.explained_variance_ratio_[i]:.2%}):")
             for j, feature in enumerate(['Coverage', 'Required Entropy', 'Provided Entropy', 
                                       'Avg Level Gap', 'Max Level Gap']):
                 print(f"{feature}: {component[j]:.3f}")
