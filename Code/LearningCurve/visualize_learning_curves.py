@@ -276,17 +276,24 @@ def compare_clustering_effect(results_dir, model_name, k):
     
     # Find result files for both cases in the specified branch
     branch_dir = os.path.join(results_dir, BRANCH_NAME, "data")
-    clustered_pattern = f"all_{model_name}_k_{k}_total_steps_*_clusters_auto_run_*.txt"
-    no_cluster_pattern = f"all_{model_name}_k_{k}_total_steps_*_run_*.txt"
     
-    clustered_files = glob.glob(os.path.join(branch_dir, clustered_pattern))
-    no_cluster_files = glob.glob(os.path.join(branch_dir, no_cluster_pattern))
+    # Tìm file cho trường hợp có clustering
+    clustered_files = []
+    for file in glob.glob(os.path.join(branch_dir, f"all_{model_name}_k_{k}_total_steps_*_clusters_auto_run_*.txt")):
+        if "clusters_auto" in file and not any(x in file for x in ["no_clustering", "without_clustering"]):
+            clustered_files.append(file)
+    
+    # Tìm file cho trường hợp không có clustering
+    no_cluster_files = []
+    for file in glob.glob(os.path.join(branch_dir, f"all_{model_name}_k_{k}_total_steps_*_run_*.txt")):
+        if "clusters_auto" not in file and not any(x in file for x in ["clustering", "with_clustering"]):
+            no_cluster_files.append(file)
     
     if not clustered_files or not no_cluster_files:
         print(f"\nWarning: Could not find both clustered and non-clustered files for {model_name} k={k}")
         print("Looking for:")
-        print(f"- Clustered pattern: {clustered_pattern}")
-        print(f"- No cluster pattern: {no_cluster_pattern}")
+        print(f"- Clustered files pattern: all_{model_name}_k_{k}_total_steps_*_clusters_auto_run_*.txt")
+        print(f"- No cluster files pattern: all_{model_name}_k_{k}_total_steps_*_run_*.txt")
         print("\nFiles found:")
         if clustered_files:
             print("Clustered files:")
@@ -405,16 +412,23 @@ def compare_models(results_dir):
     # Find all available k values from result files
     branch_dir = os.path.join(results_dir, BRANCH_NAME, "data")
     k_values = set()
+    
+    # Tìm tất cả các giá trị k có sẵn
     for model in models:
-        for is_clustered in [True, False]:
-            if is_clustered:
-                pattern = f"all_{model}_k_*_total_steps_*_clusters_auto_run_*.txt"
-            else:
-                pattern = f"all_{model}_k_*_total_steps_*_run_*.txt"
-            
-            files = glob.glob(os.path.join(branch_dir, pattern))
+        # Tìm file cho trường hợp có clustering
+        clustered_pattern = f"all_{model}_k_*_total_steps_*_clusters_auto_run_*.txt"
+        clustered_files = glob.glob(os.path.join(branch_dir, clustered_pattern))
+        
+        # Tìm file cho trường hợp không có clustering
+        no_cluster_pattern = f"all_{model}_k_*_total_steps_*_run_*.txt"
+        no_cluster_files = glob.glob(os.path.join(branch_dir, no_cluster_pattern))
+        
+        # Lọc file không có clustering
+        no_cluster_files = [f for f in no_cluster_files if "clusters_auto" not in f]
+        
+        # Thêm k values từ cả hai loại file
+        for files in [clustered_files, no_cluster_files]:
             for file in files:
-                # Extract k value from filename
                 parts = os.path.basename(file).split('_')
                 for i, part in enumerate(parts):
                     if part == 'k' and i + 1 < len(parts):
@@ -445,6 +459,10 @@ def compare_models(results_dir):
                     pattern = f"all_{model}_k_{k}_total_steps_*_run_*.txt"
                 
                 files = glob.glob(os.path.join(branch_dir, pattern))
+                # Lọc file không có clustering
+                if not is_clustered:
+                    files = [f for f in files if "clusters_auto" not in f]
+                
                 if files:
                     steps, metrics, start_step = load_evaluation_data(files[0])
                     all_steps.extend(steps)
@@ -473,6 +491,10 @@ def compare_models(results_dir):
                     pattern = f"all_{model}_k_{k}_total_steps_*_run_*.txt"
                 
                 files = glob.glob(os.path.join(branch_dir, pattern))
+                # Lọc file không có clustering
+                if not is_clustered:
+                    files = [f for f in files if "clusters_auto" not in f]
+                
                 if files:
                     # Load and plot data
                     steps, metrics, start_step = load_evaluation_data(files[0])
